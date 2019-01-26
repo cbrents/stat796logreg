@@ -1,0 +1,187 @@
+---
+title: "STAT796_HW1_code"
+author: "Colleen Brents"
+date: "January 23, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r load libraries, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(knitr)
+```
+##1. Import Data  
+```{r import data, message=FALSE, warning=FALSE}
+
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw1/ICU_raw.txt")
+icu_raw<-read_table2(url)
+```
+##2. rename and recode 
+```{r eval=TRUE}
+icu<- icu_raw %>% 
+    transmute(id=ID,
+              died=STA,
+              age=AGE,
+              female=GENDER,
+              race=factor(RACE, 
+                          levels=1:3,
+                          labels=c("white", "black", "other")),
+              service=factor(SER,
+                             levels=0:1,
+                             labels=c("medical", "surgical")),
+              cancer=CAN,
+              renal=CRN,
+              infect=INF,
+              cpr=CPR,
+              sbp=SYS,
+              hr=HRA,
+              prv_admit=PRE,
+              type=factor(TYP,
+                          levels=0:1,
+                          labels=c("elective", "emergency")),
+              fracture=FRA,
+              po2_g60=PO2,
+              '1-PO2'= po2_g60,
+              pco2_g45=PCO,
+              bicarb_g18=BIC,
+              '1 - BIC' = bicarb_g18,
+              creat_g2=CRE,
+              conscious=factor(LOC,
+                levels=0:2,
+                labels=c("no_coma_or_stupor", "stupor", "coma")))
+```
+##3. summary stats for entire cohort
+###3a. average, max, min, sc of age (years)
+
+```{r eval = TRUE}
+x<- icu %>% 
+  summarize(n=n(),
+            mean_age = mean(age),
+            max_age = max(age),
+            min_age = min(age),
+            sd_age =sd(age)) 
+print(x)
+```
+
+###3b. count of subjects with each service type 
+```{r eval=TRUE}
+a<- table (icu$service)
+print(a)
+``` 
+###3c. count of subjects with procedure type  
+```{r}
+b<- table(icu$type)
+print(b)
+```
+
+###3d. count of subjects of each race and each sex
+```{r}
+#count(icu, race, female)
+z<- table(icu$race, icu$female)
+colnames(z)<- c("male", "female")
+print(z)
+```
+
+###3e. count of subject by consciousness 
+```{r}
+#count(icu, conscious)
+x<- table(icu$conscious)
+print(x)
+```
+
+##4. summary stats for cohort, grouped by by vital status
+###4a. average, max, min, sd age
+```{r eval=TRUE}
+age_table <- icu %>%
+  group_by(Died=died) %>%
+  summarize(n=n(),
+           mean_age = mean(age),
+            max_age = max(age),
+            min_age = min(age),
+            sd_age =sd(age))  # died == 0  alive == 1
+print(age_table)
+```
+###4b. count by service type 
+```{r}
+vitals <- icu %>% 
+  group_by(died)
+y<- table(vitals$type)
+print(y)
+```
+###4c. count by procedure type 
+```{r}
+a<- table(vitals$type)
+print(a)
+```
+
+
+###4d. count by race and sex 
+```{r }
+z<- table(vitals$race, vitals$female)
+ colnames(z)<- c("male", "female")
+print(z)
+```
+###4e. count by consciousness 
+```{r}
+x<- table(vitals$conscious)
+print(x)
+```
+
+##5. graphical summaries
+###5a. scatterplot of sbp against age 
+```{r}
+ggplot(icu) +
+  theme_bw() +
+  geom_point(aes(x=sbp, 
+                 y=age, 
+                 color= as.factor(died), 
+                 shape=as.factor(died))) +
+  xlab("systolic blood pressure") +
+  ylab("age (years)") +
+  ggtitle("5a - systolic blood pressure vs age") +
+  scale_color_discrete(name="Died or not") +
+  scale_shape_discrete(name="Died or not")  #having the same text for legens combines them 
+```
+
+###5b. boxplots of hr, grouped by consciousness
+```{r}
+ggplot(icu) +
+  theme_bw() +
+  geom_boxplot(aes(group = as.factor(died), x=as.factor(died), y= hr)) +
+  xlab("vital status at discharge") +
+  ylab("heart rate (bpm)") +
+  ggtitle("5b - boxplot of hr by consciousness") +
+  scale_x_discrete(labels = c("alive", "dead"))
+```
+
+###5c. histograms of age 
+```{r, message=FALSE, warning=FALSE}
+ggplot(icu) +
+  theme_bw() +
+  geom_histogram(aes(x=age)) +
+  xlab("age(years)") +
+  ylab("count") +
+  ggtitle("5c - histogram of age") 
+
+```
+
+###5d. densit estimates of hr, grouped by consciousness 
+```{r graphical summaries of data}
+ggplot(icu) + 
+  theme_bw() + 
+  geom_line(aes(x=hr, col=as.factor(conscious), group=conscious), stat="density") +
+  xlab("Age (in years)") +
+  ylab("Density") +
+  scale_color_discrete("conscious") +
+  ggtitle("5d - density estimate of hr, grouped by consciousness") #from notes 
+```
