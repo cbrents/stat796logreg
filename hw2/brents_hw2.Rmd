@@ -1,12 +1,13 @@
 ---
 title: "hw2"
 author: "Colleen Brents"
-date: "January 30, 2019"
+date: "January 31, 2019"
 output: word_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+options(scipen=1, digits=2)
 ```
 #question about 2e and 3d
 
@@ -16,7 +17,7 @@ library(dplyr)
 library(tidyr)
 library(readr)
 library(knitr)
-library(kableExtra)
+#library(kableExtra)
 ```
 
 ```{r data input, include=FALSE}
@@ -46,24 +47,31 @@ Based on the density graph, we can see that patients who died in the ICU had spb
 
 b. fit a logistic regression model using vital status as the outcome and sbp as the predictor of interest. Provide the estimated regression coefficients. 
 
-```{r}
+```{r, include=FALSE}
 icu_glm <- glm(died~sbp, family=binomial, data=icu)
 icu_glm
 coef(icu_glm)
 coef(icu_glm)[2] #sbp estimate
-exp(coef(icu_glm))
+icucoef<- exp(coef(icu_glm))
 
-table(Estimated_Regression_Coefficients=icu_glm$coefficients) %>% 
-  kable
-kable(icu_glm$coefficients,
-      caption = "estimated regression coefficients")
+#table(Estimated_Regression_Coefficients=icu_glm$coefficients) %>% 
+ # kable
+#kable(icu_glm$coefficients,
+#      caption = "estimated regression coefficients")
 
 ```
+The answer is `r icucoef`
 A difference of one unit of SBP is associated with an odds ratio of exp(-0.777)= 1.02 for death during ICU stay. 
 
 c. what is the estimated odds ratio for dying during an ICU visit, comparing those who differ in SBP at admission by 1mmHg?
 
 ```{r}
+
+diff1mg<- exp(1*coef(icu_glm)[2]) #odds ratio for dying for 1 unit difference in SBP
+```
+The answer is `r diff1mg`
+
+```{r practice, eval=FALSE}
 x<- predict(icu_glm, newdata=data.frame(sbp=1), type="link")#link gives log odds 
 exp(x) #exp log odds gives OR 
 xx<- predict(icu_glm, newdata=data.frame(sbp=1), type="response")  #response gives predicted probability; link gives f(y) values
@@ -75,6 +83,12 @@ kable(or, caption= "estimated OR for dying during an ICU visit, for SBP differin
 d. What is the estimated odds ratio for dying during an ICU visit, comparing those who differ in SBP at admission by 15mmHg?
 
 ```{r}
+diff15mg<- exp(15*coef(icu_glm)[2]) #odds ratio for dying for 15 mmHg difference in SBP
+```
+The answer is `r diff15mg`
+
+```{r, eval=FALSE}
+#newdata=something new
 y<- predict(icu_glm, newdata=data.frame(sbp=15), type="response")  #response gives predicted probability; link gives f(y) values
 yy<- y/(1-y)
 exp(predict(icu_glm, newdata=data.frame(sbp=15), type="link"))  #same number doing long way! 
@@ -90,62 +104,76 @@ Consider the relationship between vital status (died) and visit type (type)
 a. Fill in a 2x2 table with the number of subjects having each combination of visit type and vital status
 
 ```{r}
-icu_2by2 <- table(Died=icu$died, Type=icu$type)
-colnames(icu_2by2) <-c("Elective", "Emergency")
-rownames(icu_2by2) <- c("Survived", "Died")
-kable(icu_2by2)
+#table(Died=icu$died, Type=icu$type)
 ```
-b. Of those whose visit was elective, proportion of those who died 
-c. of those whose visit was emergency, proportion of those who died 
+
+ died   Elective  Emergency
+---  ---------  ----------- ---
+0    2               38     40
+1    51             109     160
+     53             147     200  
+---  ---------  ----------- ---
+
 ```{r}
 icu_proportion<- icu %>% 
   count(died, type) %>% 
   mutate(prop=prop.table(n))
-kable(icu_proportion)
+#kable(icu_proportion)
 
 b<- 51/(51+2)
 c<- 109/(109+38)
-bc<-merge(b,c)
-colnames(bc)<-c("elective", "emergency")
-kable(bc,
-      caption="proportion of those who died whose visit was:")
+# bc<-merge(b,c)
+# colnames(bc)<-c("elective", "emergency")
+# kable(bc,
+#       caption="proportion of those who died whose visit was:")
 ```
 
+b. Of those whose visit was elective, proportion of those who did.  The answer is `r b`
+c. of those whose visit was emergency, proportion of those who died.  The anwer is `r c` 
 d. fit a logistic regression model using vital status as outcome and visit type and the predictor of interest.
 
 ```{r}
 icu2_glm<- glm(died~type, family=binomial, data=icu)
-coef(icu2_glm)
+coefd<- coef(icu2_glm)
 coef(icu2_glm)[2] #sbp estimate
 exp(coef(icu2_glm))
 
-kable(icu2_glm$coefficients,
-      caption = "estimated regression coefficients")
+#kable(icu2_glm$coefficients,     caption = "estimated regression coefficients")
 
 ```
-e. What is the estimated odds ratio for dying during an ICU visit, comparing those whose visit was an emergency to those whose was elective.
+Coefficients are `r coefd`
+
+e. What is the estimated odds ratio for dying during an ICU visit, comparing those whose visit was an emergency to those whose was elective. 
 ```{r}
 #1/(1+exp(-(coef(icu2_glm)[1] + coef(icu2_glm)[2]*0)))  #multiply by a number ; what about 0,1 variables? 
 #exp(predict(icu2_glm, newdata=data.frame(died=1), type="link")) 
+#remember what's on top, emergency =1
 
-exp(predict(icu2_glm, newdata=data.frame(type="emergency"), type="link")) #just looks at risk of having emergency surgey
-
+twoe<- exp(predict(icu2_glm, newdata=data.frame(type="emergency"), type="link")) #just looks at risk of having emergency surgey  #generates odds 
+exp(coef(icu2_glm)[2])
+#exp(predict(icu2_glm, newdata=data.frame(type="1"), type="link"))
 ```
+The answer is `r twoe`
 
-
-f. What is the predicted risk of dying during an ICU visit for people whose procedure is elective?
-g. What is the predicted risk of dying during an ICU visit for people whose procedure is an emergency?
 ```{r}
 f<- predict(icu2_glm, newdata = data.frame(type="elective"), type="response")
 g<- predict(icu2_glm, newdata=data.frame(type="emergency"), type="response")
-fg<-merge(f,g)
-colnames(fg)<- c("elective", "emergency")
-kable(fg,
-      caption="predicted risk of dying during an ICU visit for people whose survey is:")
+#fg<-merge(f,g)
+#colnames(fg)<- c("elective", "emergency")
+#kable(fg,
+      #caption="predicted risk of dying during an ICU visit for people whose survey is:")
 ```
+f. What is the predicted risk of dying during an ICU visit for people whose procedure is elective? The answer is `r f`
+g. What is the predicted risk of dying during an ICU visit for people whose procedure is an emergency? The answer is `r g`
 
 h. How do your answers for (f) and (g) compare to (b) and (c)? They're the same! 
-```{r}
+    f. `r f`
+    g. `r g`
+    b. `r b`
+    c. `r c`
+    
+
+```{r, eval=FALSE}
 kable(bc,
       caption="proportion of those who died whose visit was:")
 kable(fg,
@@ -169,25 +197,30 @@ b. Fit a logistic regression model using emergency as the outcome and vital stat
 
 ```{r}
 icu_type_glm <- glm(emergency~died, family=binomial, data=icu_type)
-coef(icu_type_glm)
+coefb<- coef(icu_type_glm)
 exp(coef(icu_type_glm))
 
 kable(icu_type_glm$coefficients,
       caption = "estimated regression coefficients")
 ```
+Coefficients are `r coefb`
 
 c. What is the estimated odds ratio for the procedure being emergency, comparing those who died during their ICU visit to those who did not.
 
-emergency = 1 
+emergency = 1 the outcome of interest  
 
 ```{r}
-#exp(predict(icu_type_glm, newdata=data.frame(emergency=1), type="link"))  #response gives predicted probability; link gives f(y) values
-
+mypred <- exp(predict(icu_type_glm, newdata=data.frame(died=1), type="link"))  #response gives predicted probability; link gives f(y) values  #emergenc is outcome of interested, died = 1, variable of inerset 
+#exp(coefficient of died =1 )
+#mypred <- exp(predict(icu_type_glm, newdata=data.frame(type=1), type="link"))
+#in line coding 
 
 ```
+round command in line 
 
+The value is `r mypred`
 
-d. How does your response to (c) compare to part (e) of Question 2?
+d. How does your response to 3(c) compare to part (e) of Question 2?
 
 e. Provide the code you used for parts (a)-(c) as an Appendix after all questions.
 
@@ -196,7 +229,6 @@ e. Provide the code you used for parts (a)-(c) as an Appendix after all question
 ```{r show-code, ref.label=all_labels(), echo = TRUE, eval=FALSE}
 #should print all code
 ```
-
 
 
 
