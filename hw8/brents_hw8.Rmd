@@ -1,0 +1,117 @@
+---
+title: "brents hw8"
+author: "Colleen Brents"
+date: "April 3, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+options(scipen=1, digits=3)
+```
+
+```{r}
+library(readr)
+library(ggplot2)
+library(splines)
+library(dplyr)
+library(tidyr)
+library(ggthemes)
+library(knitr)
+library(broom) #tidy 
+library(stringr)
+library(lmtest)
+library(sandwich)
+library(car)
+library(survival)
+```
+
+```{r}
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw8/singapore.csv")
+tea<-read_csv(url)
+```
+
+```{r pirate function again for glms}
+get_ests_table <- function(model_obj){
+  model_ests <- data.frame(names(coef(model_obj)),
+  round(coef(model_obj), digits=2),
+  round(sqrt(diag(sandwich(model_obj))), digits=2),
+      round(exp(coef(model_obj)), 2),
+      exp(confint(model_obj)))
+model_ests$ci <- paste0("(",
+                             round(model_ests[, 5], 2),
+                             ",",
+                             round(model_ests[, 6], 2),
+                             ")")
+model_ests <- model_ests[, -5:-6]
+colnames(model_ests) <- c("Model Term", "Estimate", "SE",
+                              "Exp(Est.)","95% CI")
+return(model_ests)
+}
+```
+
+each set consists of 4 controls (no disease) and 1 case (disease); there are 80 sets  
+reference Leisure world retirement example 
+#1. summarize the distribution of number of cigarettes smoked per day 
+```{r}
+ggplot(tea) +
+  geom_histogram(aes(x=cigs_day)) +
+  theme_tufte() +
+  xlab("cigarettes smoked per day")+
+  ggtitle("histogram of distribution of cigarettes smoked per day")
+```
+#2. using conditional logistic regression, estimate the odds ratio for risk of esophageal cancer comparing those who do drink hot beverages and those who do not. Adjust your estimate for sampu wine comsumption and cigarette usage (you may decide the form of variable for adjustment). Provide a summarizing statement that includes a measure of uncertainty (confidence interval) and a measure of strength of statistical evidence (p-value from hypothesis test)
+
+```{r}
+tea <- tea %>% 
+  mutate(cigs_day_gp=cut_width(cigs_day, width=10, boundary=0),
+         hotbev_cat=as.factor(hotbev))  
+range(tea$cigs_day) #0 to 98 
+str(tea$cigs_day_gp) #20 levels
+str(tea$sampu) #binary 
+tea_cdl<- clogit(case~hotbev+sampu+cigs_day+strata(set),data=tea)
+tea_cdl2<-clogit(case~sampu+cigs_day+strata(set), data=tea)
+anova(tea_cdl, tea_cdl2, test="LRT")
+summary(tea_cdl)
+two_or<- exp(coef(tea_cdl)[1])
+two_ci<-exp(confint(tea_cdl, level=0.95))[1,1:2]
+
+```
+
+The odds ratio for risk of esophageal cancer among those who do not drink hot beverages and those who do, when adjusted for sampu wine comsumption and cigarette usage is `r two_or` with a 95% confidence interval of `r two_ci`. Differences between models with and without 'hot beverages' are significant (p=1.9e-08). 
+
+#3. Is there evidence of a trend in risk for higher amounts of hot beverage consumption? Evaluate this by fittign a model that uses number of hot beverages as continusous exposure. Provide summarizing statement that includes measure of uncertainty (condifence interval) and a measure of the strength of statistical evidence (pvalue)
+
+```{r}
+tea_glm<- glm(case~strata(hotbev), data=tea) #produces OR for each level hotbev  #categorical
+summary(tea_glm)
+exp(coef(tea_glm))
+test3<- glm(case~factor(hotbev), data=tea)  #same as tea_glm
+exp(coef(test3)) #produces OR for each level hotbev
+comp<-glm(case~hotbev, data=tea)
+anova(tea_glm, comp, test="LRT")
+
+test2<- glm(case~hotbev+strata(set), data=tea)  #produces OR for every set (n=80)  #no family=binomial when strata
+exp(coef(test2))
+
+test4<- glm(case~factor(hotbev)+factor(set), data=tea) #produces OR for each set again 
+exp(coef(test4))
+
+test5<- glm(case~hotbev_cat, data=tea, family=binomial)  #same as tea_glm, but made new variables BUT when add family=binomial, lot bigger #s because it's ordinary log reg
+exp(coef(test5))
+
+exp(confint(tea_glm, level=0.95))
+
+test<- glm(case ~ hotbev, data=tea, family=binomial) #continous?
+test6<-glm(case~.,data=tea,family=binomial) #all the variables 
+exp(coef(test6))
+exp(coef(test))  #continous 
+exp(confint(test, level=0.95))
+```
+
+
+## Appendix
+
+```{r show-code, ref.label=all_labels(), echo = TRUE, eval=FALSE}
+
+```
