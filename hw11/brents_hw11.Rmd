@@ -1,0 +1,166 @@
+---
+title: "Applied Logistic Regression and Survival Analysis HW11"
+author: "Colleen Brents"
+date: "4/30/2019"
+output: word_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+options(scipen=1, digits=2)
+```
+
+```{r libraries}
+library(readr)
+library(ggplot2)
+library(splines)
+library(dplyr)
+library(tidyr)
+library(ggthemes)
+library(knitr)
+library(broom) #tidy 
+library(stringr)
+library(lmtest)
+library(sandwich)
+library(car)
+library(survival)
+library(ROCR)
+library(gridExtra) #to make graphs side by side 
+library(caret)
+library(survminer)
+
+```
+
+```{r load data}
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw11/uis.csv")
+uis<-read_csv(url)
+
+#heart$mi_recurr <- factor(heart$mi_recurr, levels=c(0, 1), labels=c("First heart attack", "Recurring heart attack"))
+```
+
+```{r clean NOT Necessary if splitting into training sets }
+df<- uis %>% 
+  mutate(id=as.factor(id),
+         white=as.factor(white),
+         tx_long=as.numeric(tx_long),  #doesn't matter if numeric or factor 
+         status=as.numeric(status))   #event or outcome needs to be numeric? 
+```
+
+1. Assuming treatment type (long or short) was randomly assigned, answer the question of interest for the study by:
+
+a. Provide a plot of estimated survival curves for time until drug use comparing long and short treatment (assuming time is in days)
+
+```{r 2 curve survival plot by treatment type}
+df_surv<-Surv(df$time, df$status)  #not right censored data?! also continuous data? 
+df_survfit<-survfit(df_surv ~ tx_long, data=df)
+print(ggsurvplot(df_survfit, data=df, break.x.by=365.25,
+                 surv.median.line="hv",
+                 title="Survival by treatment type",
+                 xscale="d_y", xlab="Time (Years)",
+                 conf.int = FALSE, pval=TRUE, 
+           legend.labs=c("Short", "Long"),
+           legend.title="Treatment"))
+```
+
+b. Estimate the hazard ratio for time until drug use, comparing long to short treatment
+
+The hazard for those with long treatment is 0.79 times the hazard for those with short treatment. 
+
+The estimated time to drug use is 0.79 times lower than those with short treatment. 
+
+```{r oneb, include=FALSE}
+coxph(Surv(df$time, df$status)~tx_long, data=df)  
+```
+
+2. Is there a treatment effect when adjusting for age and prior treatment status? 
+
+```{r prior treatment, include=FALSE}
+coxph(Surv(df$time, df$status)~age+nprior_tx, data=df)
+```
+
+The hazard for those with prior treatment is 1.036 times the hazard for those without prior treatment, adjusted for age. 
+
+The estimated time to drug use is 1.036 times the higher among those with prior drug treatment than those without, when adjusted for age.  
+
+The estimated hazard ratio for those with and without prior drug treatment, among people of the same age, is 1.036. 
+
+3. Is there a difference in time until return to drug use by an individual's history of IV drug use? 
+
+a. provide a plot of estimated survival curves
+```{r survival by iv use}
+df_surv<-Surv(df$time, df$status)  #not right censored data?! also continuous data? 
+df_survfit<-survfit(df_surv ~ iv_use, data=df)
+print(ggsurvplot(df_survfit, data=df, break.x.by=365.25,
+                 surv.median.line="hv",
+                 title="Survival by IV use",
+                 xscale="d_y", xlab="Time (Years)",
+                 conf.int = FALSE, pval=TRUE, 
+           legend.title="Treatment"))
+```
+
+b. Fit a proportional hazards regression model with IV use history as the predictor of interest and that adjusts for age. Report the estimated hazard ratios for IV usage categories in 1-2 summarizing sentences
+
+```{r iv usage}
+blurg<- coxph(Surv(df$time, df$status)~factor(iv_use) + age, data=df)  #iv_use is a categorical predictor variable
+threea<- exp(coef(blurg)[1]) # compare previous to never 
+threeb<- exp(coef(blurg)[2])
+threec<-exp(coef(blurg)[2]-coef(blurg)[1])
+```
+
+The estimated hazard ratio comparing those with previous iv use to those who have never used ivs is `r threea`, adjusted for age.
+
+The estimated hazard ratio comparing those with recent iv use to those who have never used ivs is `r threeb` , adjusted for age.
+
+The estimated hazard ratio comparing those with recent iv use to previous iv use is `r threec`, adjusted for age. 
+
+
+4. Is there a difference in time until return to drug use by an individual's use of heroin or cocaine the 3 months prior to admission? answer by providing and interpreting estimated hazard ratios (can choose what to adjust for)
+
+```{r technically dont need graph}
+df_surv<-Surv(df$time, df$status)  #not right censored data?! also continuous data? 
+df_survfit<-survfit(df_surv ~ hercoc_use, data=df)
+print(ggsurvplot(df_survfit, data=df, break.x.by=365.25,
+                 surv.median.line="hv",
+                 title="Time until return survival analysis by \n heroin or cocaine use",
+                 xscale="d_y", xlab="Time (Years)",
+                 conf.int = FALSE, pval=TRUE, 
+                 legend.labs=c("Cocaine", "Heroin", "Both", "Neither"),
+           legend.title="Use within 3 months"))
+```
+```{r prior 3 month use, include=FALSE}
+df$hercoc_use<- as.factor(df$hercoc_use)
+levels(df$hercoc_use)
+df$hercoc_use<- factor(df$hercoc_use, levels = c("Neither", "Cocaine", "Heroin", "Heroin & Cocaine"))  #reorder characters 
+levels(df$hercoc_use)
+
+blurg<- coxph(Surv(df$time, df$status)~factor(hercoc_use) + age, data=df)   
+foura<- exp(coef(blurg)[1]) #cocaine to neither
+fourb<- exp(coef(blurg)[2])  # heroin to neither
+fourc<- exp(coef(blurg)[3])  # cocain and heroin to neither
+fourd<-exp(coef(blurg)[2]-coef(blurg)[1]) #heroin to cocaine
+foure<- exp(coef(blurg)[2]-coef(blurg)[3]) #heroin to heroin and cocine 
+fourf<-exp(coef(blurg)[1]-coef(blurg)[3]) #cocaine to heroin and cocoin 
+```
+
+The estimated hazard ratio comparing those with previous cocaine use to those with no previous drug use is `r foura`, adjusted for age at baseline.
+
+The estimated hazard ratio comparing those with previous heroin use to those without previous drug use is `r fourb`, adjusted for age at baseline.
+
+The estimated hazard ratio comparing those with previous cocaine and heroin use to those without prior drug use is `r fourc`, adjusted for age at baseline.
+
+The estimated hazard ratio comparing those with previous heroin use to previous cocaine use is `r fourd`, adjusted for age at baseline.
+
+The estimated hazard ratio comparing those with previous heroine use to those with previous cocaine and heroin use is `r foure`, adjusted for age at baseline.
+
+The estimated hazard ratio comparing those with previous cocaine use to those with previous cocaine and heroin use is `r fourf`, adjusted for age at baseline. 
+
+Basically, people with heroin experience are more likely to relapse sooner than those with cocaine (or no drug) experience. This seems reasonable given 'Don't Do Drugs Campaigns' and movies like 'Requiem for a Dream'.  
+
+## Appendix
+
+```{r show-code, ref.label=all_labels(), echo = TRUE, eval=FALSE}
+
+```
