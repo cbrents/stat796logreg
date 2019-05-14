@@ -1,0 +1,529 @@
+---
+title: "logreg final"
+author: "Colleen Brents"
+date: "April 29, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE,
+                      warning = FALSE)
+options(scipen=1, digits=2)
+```
+```{r load libraries }
+library(readr)
+library(ggplot2)
+library(ggthemes)
+library(splines)
+library(dplyr)
+library(tidyr)
+library(ggthemes)
+library(knitr)
+library(broom) #tidy 
+library(stringr)
+library(lmtest)
+library(sandwich)
+library(car)
+library(survival)
+library(ROCR)
+library(gridExtra) #to make graphs side by side 
+library(caret)
+library(survminer)
+library(arsenal) #pretty pretty tables 
+```
+```{r load data}
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/final/fh_20yr.csv")
+fh_20yr<-read_csv(url)  #binary
+url2 <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/final/fh_mifchd.csv")
+fh_mifchd<-read_csv(url2)#followuptime
+url3<-paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/final/fh_20yr_test.csv")
+fh_20yr_test<- read_csv(url3)  #binary
+```
+```{r clean and check missing data fh_20yr}
+#what is R doing automatically for missing data? supposedly the tests cant run with NA 
+#check for missing data?
+str(fh_20yr)
+#clean data
+#non-numeric variables id; sex; visit; bp_meds; smoke_curr; edu; diab; mi_fchd_in20 
+#numierc age, sbp, dbp, cigs_day, chol, mbi, glu, hr 
+
+fh_20yr_clean <- fh_20yr %>% 
+  mutate(sex=factor(sex, levels=c(0,1), labels=c("male", "female")),
+         id=factor(id),
+         visit=factor(visit),
+         bp_meds=factor(bp_meds, levels=c(0,1), labels=c("no", "yes")),
+         diab=factor(diab, levels=c(0,1), labels=c("no", "yes")),
+         smoke_curr=factor(smoke_curr, levels=c(0,1), labels=c("no", "yes")) ,
+         mi_fchd_in20=factor(mi_fchd_in20, levels=c(0,1), labels=c("no", "yes")))  %>% 
+  subset(select=-c(visit))
+#check for missing data in fh_20yr_clean 
+summary(is.na(fh_20yr_clean)) #bp_meds 37; cigs_day 23; educ 74; chol 41; bmi 10; glu 285; hr 1 #6 columns with missing data 
+miss<- t(colSums(is.na(fh_20yr_clean)))
+kable(t(colSums(is.na(fh_20yr_clean)))) #tells you which var have missing values and how many 
+
+```
+```{r clean mi_fchd ; NO baseline characteristics on mi_fchd ; with time to event descriptive stats on mi_20yr_clean }
+#density curve of those with at least 20 years follow up 
+#density curve for continuous data 
+#histogram 
+#mean, median, CI of survial counts 
+#descriptive stats - n ; age; sex, visit, sbp, dpb, cigs
+# some function where if_numeric then mean=mean(x), na.rm=TRUE 
+# proportions of categorical data 
+str(fh_mifchd)
+fh_mifchd_clean <- fh_mifchd %>% 
+  mutate(sex=factor(sex, levels=c(0,1), labels=c("male", "female")),
+         id=factor(id),
+         visit=factor(visit),
+         bp_meds=factor(bp_meds, levels=c(0,1), labels=c("no", "yes")),
+         diab=factor(diab, levels=c(0,1), labels=c("no", "yes")),
+         smoke_curr=factor(smoke_curr, levels=c(0,1), labels=c("no", "yes")),
+         prev_angina=factor(prev_angina, levels=c(0,1), labels=c("no", "yes")),
+         prev_ht=factor(prev_ht, levels=c(0,1), labels=c("no", "yes")),
+         prev_stroke=factor(prev_stroke, levels=c(0,1), labels=c("no", "yes")),
+         mi_fchd=factor(mi_fchd, levels=c(0,1), labels=c("no_event", "event")))   #worked!!!!!!
+```
+```{r  pretty tables with arsenal and tabley stats fh_mifchd}
+library(arsenal)
+data(mockstudy) # practice 
+dim(mockstudy)
+str(mockstudy)
+tab1<-tableby(arm~sex + age, data=mockstudy) #practice 
+summary(tab1, test=TRUE)   #click knit_asis button
+
+tab3<-tableby(mi_fchd ~ sex + age + sbp + dbp + bp_meds + smoke_curr + cigs_day + educ + chol + 
+                bmi + gluc + diab + hr + prev_angina + prev_stroke + prev_ht + time_mifchd, data=fh_mifchd_clean, digits=2 )
+# kable(summary(tab3))   #work on renaming column names and row names 
+tab4<-tableby(mi_fchd_in20 ~ sex + age + sbp + dbp + bp_meds + smoke_curr + cigs_day + educ + chol + 
+                bmi + gluc + diab + hr, data=fh_20yr_clean, digits=2 )
+#kable(summary(tab4))
+```
+```{r table of missing data count percentage another way to show it }
+#make table to show missing values
+var<- c("bp_med", "cigs_day", "educ", "chol", "bmi", "gluc", "hr")
+val<-c(50,26,95,47,18,353,1)
+perc<- (val/3848)*100
+percr<- round(perc,2)  #makes 2 decimal placces 
+miss<- cbind(var, val, percr)
+missr<- data.frame(miss)
+missrr<- missr[order(val),]
+colnames(missrr)<-c("missing variable", "count", "percentage missing")
+row.names(missrr) <- NULL  #removes row numbers 
+kable(missrr)
+```
+
+# Abstract
+coming soon
+intr
+methods - All analyses were performed using R statistical software, version 1.1.463 and #home version. (R Studio, place). We .... Odds ratios and 95% confidence intervals were calculated for an ....  The basic model had the following form: 
+logit(p(y)) = .....
+where Y indicated the prescence of an MI of FCHD. The a priori models contained ... .  
+results
+conclusion 
+
+# Introduction
+
+Coronary heart diesase is a common health issue facing people today. Lifestyle and genetics alike contribute to a person's risk of CHD. 
+Also known as astherosclerosis, is the buildup of plaque in the arterial walls. Plaque buildup obstructs blood flow. Additionally, clots may break off of the plaque buildup and cause 'acute occulsion of the artery'. Lifestyle adjustments, medications, and surgical procedures can 'open' restrircted arteries. 
+Coronary circulation refers to the path and network of vessels that provide blood to the heart/myocardic muscle. If blood flow is restricted or impeded within this network, the heart muscle does not get enough oxygen and starts to die, causing a cascading effect. Other forms of asthersclerosis include strokes/ circle of willis, the network of vessels that deliver blood to the brain. 
+
+The goal of the present study is to identify trends in the association between cholesterol serum levels and risk of CHD. 
+Researchers used data from the FHS cohort. 
+Glucose has the most missing data (in ENTIRE dataset)
+No missing data for diabetic, and gluc would be an indicator for diabetes. Could eliminate, but then miss out on pre-diabetic, undiagnosed people. 
+
+
+# Variable Selection 
+Relevant variables of interest for this question include 
+sex
+age
+sbp (systolic blood pressure) - the pressure in blood vessels when the heart beats 
+(dbp (diasolitc blood pressure) - the pressure in blood vessels when the heart rests between beats
+
+A cohort of data on subjects who had at least 20 years of followup or an MI or fatal CHD within 20 years of baseline was provided with 3060 observations.
+A cohort of data on subjects with any amouny of followup or an MI or fatal CHD was provided with 3848 observations. 
+
+#Results
+
+Descriptive statistics for the population with any amount of followup is presented in Table 1. (similar descriptive stats for the cohort with 20yrs follow up is available in the appendix)
+```{r results tables}
+kable(summary(tab3))   #work on renaming column names and row names
+```
+
+
+Log transformations can be helpful when data is skewed right ... Lecture 7 Flexible Adjustment p 12 
+
+
+#Appendix
+```{r appendix codes }
+kable(summary(tab4)) #descriptive stats for 20yr follow up dataset 
+```
+
+```{r try to model}
+get_ests_table <- function(model_obj){
+  model_ests <- data.frame(names(coef(model_obj)),
+  round(coef(model_obj), digits=4),
+  round(sqrt(diag(sandwich(model_obj))), digits=4),
+      round(exp(coef(model_obj)), 4),
+      exp(confint(model_obj)))
+model_ests$ci <- paste0("(",
+                             round(model_ests[, 5], 4),   #was 2
+                             ",",
+                             round(model_ests[, 6], 4),   #was 2 
+                             ")") #combine 2 columns to make CI intervals 
+model_ests <- model_ests[, -5:-6] #remove those separate upper and lower CI limits 
+colnames(model_ests) <- c("Model Term", "Estimate", "SE",
+                              "Exp(Est.)","95% CI")
+return(model_ests)
+}
+#acting weird for outcome within 20yrs
+main_model<-glm(mi_fchd_in20 ~ chol+sex+ns(age,3)+ns(sbp, 3) +smoke_curr +ns(gluc,3) + diab, family=binomial, data=fh_20yr_clean)
+summary(main_model)   #standard error tells you how wide CI should be 
+(exp(coef(main_model)[2]))
+main_model_ests<-get_ests_table(main_model)
+kable(main_model_ests, digits=6, row.names=F)
+```
+We estimate the odds of an MI or FCHD within 20 years of followup are 1.0086 (1.0059, 1.0113) times higher for a one unit difference in cholesterol serum levels (mg/dL), when adjusting for age, sex, sbp, glucose, current smokign status, and diabetes.  
+
+***glu and diabetes could be correlated - or glucose might indicate non diagnosed diabetics
+****likewise, diabetics might be taking medications to control glucose 
+
+#for adjusting, refer to HW7 sensetivity analysis question 2e 
+
+
+```{r now modeling for time until disease using survival analysis}
+df<-fh_mifchd_clean
+df_surv<-Surv(df$time_mifchd, df$mi_fchd)
+df_survfit<-survfit(df_surv ~ chol , data=df)
+plot(df_survfit) #looks scary  probably one line per chol level....   something about right skew transformation? 
+print(ggsurvplot(df_survfit, data=df))
+```
+
+```{r modeling help comparisons to hw in the end it was rounding in the super function}
+#compare to hw7
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw4/icu2.csv")
+icu<-read_csv(url)
+glm_icu<- glm(died~cpr + type*service, data=icu, family=binomial)
+main_model<- glm_icu
+summary(glm_icu)
+
+
+#compare to hw8
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw8/singapore.csv")
+tea<-read_csv(url)
+tea <- tea %>% 
+  mutate (hotbev_cat=as.factor(hotbev),
+         hot_bevbin=hotbev, 
+         hot_bevbin=as.factor(hot_bevbin))
+tea<- tea %>% mutate(hot_bevbin=hotbev)
+tea$hot_bevbin[tea$hot_bevbin==1] <- "1" 
+tea$hot_bevbin[tea$hot_bevbin==2] <- "1"
+tea$hot_bevbin[tea$hot_bevbin==3] <- "1"
+tea_cdl_bin<- clogit(case~ hot_bevbin +sampu+cigs_day+strata(set), data=tea)
+summary(tea_cdl_bin)
+#compare to hw11
+url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw11/uis.csv")
+uis<-read_csv(url)
+df<- uis %>% 
+  mutate(id=as.factor(id),
+         white=as.factor(white),
+         tx_long=as.numeric(tx_long),
+         iv_use=as.factor(iv_use)) #doesn't matter if numeric or factor 
+         #status=as.numeric(status))
+df_surv<-Surv(df$time, df$status)  #not right censored data?! also continuous data? 
+df_survfit<-survfit(df_surv ~ tx_long, data=df)
+print(ggsurvplot(df_survfit, data=df, break.x.by=365.25,
+                 surv.median.line="hv",
+                 title="Survival by treatment type",
+                 xscale="d_y", xlab="Time (Years)",
+                 conf.int = FALSE, pval=TRUE, 
+           legend.labs=c("Short", "Long"),
+           legend.title="Treatment"))
+coxph(Surv(df$time, df$status)~tx_long, data=df)  
+
+
+
+
+
+
+
+main_model<-glm(time_mifchd~chol+sex+ns(age,3)+ns(sbp,3), family=binomial, data=fh_mifchd_clean)   #survival analysis becuase outcome of interest is continuous 
+```
+
+```{r desnity chol}
+df<- fh_20yr_clean
+
+ggplot() + theme_tufte() + ggtitle("Density plot of chol and mi_fchd") +  
+  geom_density(aes(x=chol, col=mi_fchd_in20), data=df) + scale_color_discrete(name="had mi or fchd")   #density
+```
+
+```{r graphs }
+female<- fh_mifchd %>% group_by (mi_fchd, sex) %>% summarise(count=n()) 
+
+
+
+
+        
+test<- lapply(testdf, function(x) rbind(mean=mean(x),
+                                    sd=sd(x),
+                                    median=median(x),
+                                    mean=mean(x),
+                                    s.size=length(x)))          
+testdf<-select(df, c(age, chol, cigs_day))
+data.frame( test_df )
+print(test)
+print(ddst)
+
+
+
+df<- fh_20yr_clean
+ggplot() + theme_tufte() + ggtitle("Density plot of age and mi_fchd") +  
+  geom_density(aes(x=age, col=interaction(mi_fchd_in20)), data=df) + scale_color_discrete(name="had mi or fchd")   #density
+
+ggplot() + theme_tufte() + ggtitle("Density plot of chol and mi_fchd") +  
+  geom_density(aes(x=chol, col=mi_fchd_in20), data=df) + scale_color_discrete(name="had mi or fchd")   #density
+ggplot(df) + theme_tufte() + ggtitle("histogram of age and mi_fchd") + geom_histogram(aes(x=age, group=mi_fchd_in20, fill=mi_fchd_in20)) +scale_color_discrete(name="had mi or fchd")
+
+ggplot(df) + geom_histogram(aes(x=age, group=mi_fchd_in20, col=mi_fchd_in20), binwidth=2) + theme_tufte()#as.factor gives the lines and coloring 
+ggplot(df, aes(age, fill=mi_fchd_in20)) + geom_histogram(binwdith=50) + theme_tufte()
+  
+g<- ggplot(df, aes(mi_fchd_in20)) + xlab("MI or Fatal CHD") + theme_tufte() +ylab("percent") 
+g+ geom_bar(aes(y=100*(..count..)/sum(..count..), fill=diab), position=position_dodge()) +ggtitle("Bar plot of mi_fchd and diabetes status")
+g+ geom_bar(aes(y=100*(..count..)/sum(..count..),fill=sex), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and sex")
+g+ geom_bar(aes(y=100*(..count..)/sum(..count..),fill=smoke_curr), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and smoking")
+
+
+cig<- ggplot(df, aes(cigs_day)) + xlab("number of cigs per day") + theme_tufte() + ylab("count") 
+cig + geom_bar(aes(fill=mi_fchd)) + ggtitle("bar chart cigs per day and mi_fchd")
+cig+geom_density(aes(col=interaction(mi_fchd))) + ggtitle("density plot cigs per day and mi_fchd")
+
+ggplot(df) + geom_histogram(aes(x=cigs_day, group=mi_fchd, fill=mi_fchd), bins=50) + theme_tufte() + ggtitle("hisotgram of cigs per day and mi_fchd")   #not sure if group does anthing 
+ggplot(df) + geom_histogram(aes(x=age, group=mi_fchd, fill=mi_fchd), bins=90) + theme_tufte() + ggtitle("hisotgram of age and mi_fchd")   #not sure if group does anthing 
+
+
+#age histogram 
+x<- ggplot(df, aes(age)) + xlab("age") + theme_tufte()+ ylab("count") 
+x+ geom_bar(aes(fill=mi_fchd), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and age")
+x+ geom_bar(aes(fill=mi_fchd), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and age") +geom_text(aes(label=..count..), stat='count',vjust=-0.5)  #adding number counts to bars ... almost there 
+```
+
+
+
+```{r basic survival curve with whole dataset}
+df <- fh_mifchd_clean
+max(df$time_mifchd) #8766   24 yrs
+df_surv<-Surv(df$time_mifchd, df$mi_fchd)
+df_survfit<-survfit(df_surv ~ 1, data=df)
+print(ggsurvplot(df_survfit, data=df, break.x.by=365.25,
+                 surv.median.line="hv",
+                 title="MI CHD survival",
+                 xscale="d_y", xlab="Time (Years)"))
+                 #risk.table=TRUE, risk.table.col='strata'))  # is no median line 
+#1 yr is too small; 5 yr = 1826 days 10yr = 3652
+str(df_survfit)
+#r surv stuff
+summary(df_survfit, times=365*c(1:25))
+#r log rank test}
+df_survfit_chol<-survfit(df_surv~chol, data=df)
+
+ggsurvplot(df_survfit_chol, data=df,
+           title="Time until death",
+                 break.x.by=365.25,
+           xscale="d_y",xlab="Time (Years)",conf.int = FALSE)
+
+survdiff(df_surv ~ chol, data=df)  #gives all the values of chol
+print(survdiff(df_surv ~ sex, data=df), digits=4)#log rank test 
+survdiff(formula=surv(time_mifchd, mi_fchd)~chol, data=df)
+
+#coxph!
+df$time_mifchd<-as.numeric(df$time_mifchd)
+ph_df_chol<- coxph(Surv(df$time_mifchd, df$mi_fchd)~chol, data=df)
+ph_df_chol
+exp(10*coef(ph_df_chol))
+exp(20*coef(ph_df_chol))
+exp(-10*coef(ph_df_chol))
+summary(ph_df_chol)
+```
+
+The estimated hazard ratio for a difference of 1 chol serum level in baseline chol is 1.007065
+The estimated hazard ratio for a difference of 10 chol serum levels in baseline col is 1.1.
+The estimated hazard ratio for a difference in 20 chol serum levels in baseline col is 1.2
+We reject the null hypothesis that chol serum is not related to survival (p<0.0001). The estimated hazard ratio for those with chol serum diff compare to those without is 1.01 (1.01, 1.01) <- probably because 1 variable only.    # from L17 p 33 
+
+```{r modeling tests make three df Part 2!!!for binary data analysis L13 }
+#confirmatory needs train,test,validate sets
+set.seed(10)
+trainfull_inds<-createDataPartition(df$mi_fchd, p=0.5)
+trainfull<-df[trainfull_inds[[1]],]
+train_df<-df[-trainfull_inds[[1]],]
+train_inds<-createDataPartition(trainfull$mi_fchd, p=0.5) #1924
+test_df<-trainfull[train_inds[[1]],]  #926
+validate_df<-trainfull[-train_inds[[1]],] #962 
+c(nrow(train_df),nrow(test_df), nrow(validate_df))
+
+blurg<- train_df %>% 
+  count(mi_fchd, sex)  #make 2x2 table to look for relationships? 
+
+train_df<- train_df %>% 
+  mutate(sex=as.factor(sex),
+         bp_meds=as.factor(bp_meds),
+         smoke_curr=as.factor(smoke_curr),
+         diab=as.factor(diab),
+         mi_fchd=as.factor(mi_fchd))
+levels(train_df$sex) <- c("male", "female")
+levels(train_df$diab) <-c("not diabetic", "diabetic")
+levels(train_df$mi_fchd)<- c("no event", "event")
+```
+
+```{r clean NOT Necessary if splitting into training sets }
+df<- fh_mifchd %>% 
+  mutate(sex=as.factor(sex),
+         bp_meds=as.factor(bp_meds),
+         smoke_curr=as.factor(smoke_curr),
+         diab=as.factor(diab))
+
+
+#ways to see is.na 
+
+str(which(is.na(df), arr.ind=TRUE))
+length(unique(which(is.na(df), arr.ind=TRUE))) #942
+which(is.na(df$chol), arr.ind=TRUE)  #shows 41 rows missing chol data  #could id rownames for each missing var, stitch columns together and remove rows?
+# not in newest code 
+```
+
+
+```{r obsolete?}
+#descriptive for numerical variables 
+ddst<- fh_mifchd_clean %>% 
+  group_by(mi_fchd) %>% 
+  mutate(count=n()) %>% 
+  summarise(n=n(),
+          mean_age= mean(age),
+          SD_age=sd(age),
+          mean_sbp=mean(sbp),
+          SD_sbp=sd(sbp),
+          mean_dbp=mean(dbp),
+          SD_dbp=sd(dbp, na.rm=TRUE), 
+          mean_chol=mean(chol, na.rm=TRUE),
+          SD_chol=sd(chol, na.rm=TRUE),
+          mean_cigs_day=mean(cigs_day, na.rm=TRUE),
+          SD_cigs=sd(cigs_day, na.rm=TRUE), 
+          mean_hr=mean(hr, na.rm=TRUE),
+          sd_hr=sd(hr, na.rm=TRUE), 
+          mean_BMI=mean(bmi, na.rm=TRUE),
+          SD_BMI=sd(bmi, na.rm=TRUE), 
+          mean_glu=mean(gluc, na.rm=TRUE), 
+          SD_glu=sd(gluc, na.rm=TRUE))
+```
+
+```{r manual tables}
+kable(t(ddst))
+fh_mifchd_clean %>% 
+  group_by(mi_fchd) %>% 
+  summarise(n=n(),
+            mean_hr=mean(hr, na.rm=TRUE),
+            sd_hr=sd(hr, na.rm=TRUE))
+#missing 
+summary(is.na(fh_mifchd))
+missing_name<- c("bp_meds", "cigs_day", "educ", "chol", "bmi", "gluc", "hr")
+missing_num<- c(50, 26, 95, 47, 18, 353,1)
+missing_perc<- (missing_num/3848) * 100
+miss_data<- rbind(missing_name, missing_num, missing_perc)
+
+
+#table(outcome of interest, variable of interest)
+df<- fh_mifchd_clean
+table(fh_mifchd_clean$mi_fchd,fh_mifchd_clean$sex)
+#could make vectors of proportional data
+sex_no_event<-c(1280, 1993)  #male, female
+sex_event<-c(379, 196)
+male_no_event<- 1280/(sum(sex_no_event))*100
+male_event<-379/(sum(sex_event))*100
+
+table(df$mi_fchd, df$bp_meds)
+bp_no_event<-c(3140, 92) #no, yes
+bp_event<-c(535, 31) #no, yes
+bp_no_use_no_event<- 3140/(sum(bp_no_event))*100
+bp_no_use_event<- 535/(sum(bp_event))*100
+
+table(df$mi_fchd,df$smoke_curr)
+curr_smoke_no_event<- c(1700, 1573) #no, yes
+curr_smoke_event<-c(258, 317) #no, yes
+curr_smoke_no_no_event<- 1700/(sum(curr_smoke_no_event))*100
+curr_smoke_no_yes_event<-258/(sum(curr_smoke_event))*100
+
+table(df$mi_fchd, df$educ)
+educ_no_event<-c(355, 950, 1328, 561) #bach, HS, less, some college
+educ_event<- c(66, 146, 271, 76) #bach, HS, less, some college
+less_no_event<- 1328/(sum(educ_no_event))*100
+less_event<- 271/(sum(educ_event))*100
+hs_no_event<- 950/(sum(educ_no_event))*100
+hs_event<- 146/(sum(educ_event))*100
+some_no_event<- 561/(sum(educ_no_event))*100
+some_event<- 76/(sum(educ_event))*100
+bach_no_event<- 355/(sum(educ_no_event))*100
+bach_event<- 66/(sum(educ_event))*100
+
+table(df$mi_fchd,df$diab)
+diab_no_event<- c(3206, 67) #no diab, yes
+diab_event<-c(537, 38) #no yes
+diab_no_no_event<-3206/(sum(diab_no_event))*100
+diab_no_yes_event<-537/(sum(diab_event))*100
+
+table(df$mi_fchd, df$prev_angina)
+ang_no_event<-c(3214, 59) # no ,yes 
+ang_event<- c(540, 35) #n y 
+ang_no_no_event<-3214/(sum(ang_no_event))*100  
+ang_no_yes_event<-540/(sum(ang_event))*100
+
+table(df$mi_fchd, df$prev_ht)
+ht_no_event<- c(2313, 960) #no, yes 
+ht_event<-c(293, 282) #no y 
+ht_no_no_event<-2313/(sum(ht_no_event))*100
+ht_no_yes_event<- 293/(sum(ht_event))*100
+
+table(df$mi_fchd, df$prev_stroke)
+stroke_no_event<- c(3255, 18)   #no yes 
+stroke_event<- c(569, 6) #n y 
+stroke_no_no_event<-3255/(sum(stroke_no_event))*100
+stroke_no_yes_event<-569/(sum(stroke_event))*100
+
+#i KNOW there's a faster way to do this ..... 
+```
+
+```{r sumstats chol levels and sbp and dbp}
+chol1<- fh_mifchd_clean %>% 
+  group_by(mi_fchd) %>% 
+  summarize (n=n(),
+             min_chol=min(chol, na.rm=TRUE),
+             '5%'=quantile(chol, probs=0.05, na.rm=TRUE),
+             mean_chol=mean(chol, na.rm=TRUE),
+            '95%'=quantile(chol, probs=0.95, na.rm=TRUE),
+             max_chol=max(chol, na.rm=TRUE),
+             sd_chol=sd(chol, na.rm=TRUE))
+kable(chol1)
+
+sbp1<- fh_mifchd_clean %>% 
+  group_by(mi_fchd) %>% 
+  summarize (n=n(),
+             min_sbp=min(sbp, na.rm=TRUE),
+             '5%'=quantile(sbp, probs=0.05, na.rm=TRUE),
+             mean=mean(sbp, na.rm=TRUE),
+            '95%'=quantile(sbp, probs=0.95, na.rm=TRUE),
+             max=max(sbp, na.rm=TRUE),
+             sd=sd(sbp, na.rm=TRUE))
+kable(sbp1)
+
+gluc1<- fh_mifchd_clean %>% 
+  group_by(mi_fchd) %>% 
+  summarize (n=n(),
+             min_sbp=min(gluc, na.rm=TRUE),
+             '5%'=quantile(gluc, probs=0.05, na.rm=TRUE),
+             mean=mean(gluc, na.rm=TRUE),
+            '95%'=quantile(gluc, probs=0.95, na.rm=TRUE),
+             max=max(gluc, na.rm=TRUE),
+             sd=sd(gluc, na.rm=TRUE))
+kable(gluc1)
+```
+
