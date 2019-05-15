@@ -4,13 +4,13 @@ author: "Colleen Brents"
 date: "April 29, 2019"
 output: word_document
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, 
                       message = FALSE,
                       warning = FALSE)
 options(scipen=1, digits=2)
 ```
+
 ```{r load libraries }
 library(readr)
 library(ggplot2)
@@ -31,7 +31,9 @@ library(gridExtra) #to make graphs side by side
 library(caret)
 library(survminer)
 library(arsenal) #pretty pretty tables 
+library(gridExtra) # make graphs side by side 
 ```
+
 ```{r load data}
 url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/final/fh_20yr.csv")
 fh_20yr<-read_csv(url)  #binary
@@ -40,7 +42,8 @@ fh_mifchd<-read_csv(url2)#followuptime
 url3<-paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/final/fh_20yr_test.csv")
 fh_20yr_test<- read_csv(url3)  #binary
 ```
-```{r clean and check missing data fh_20yr}
+
+```{r clean fh_20yr}
 #what is R doing automatically for missing data? supposedly the tests cant run with NA 
 #check for missing data?
 str(fh_20yr)
@@ -57,13 +60,20 @@ fh_20yr_clean <- fh_20yr %>%
          smoke_curr=factor(smoke_curr, levels=c(0,1), labels=c("no", "yes")) ,
          mi_fchd_in20=factor(mi_fchd_in20, levels=c(0,1), labels=c("no", "yes")))  %>% 
   subset(select=-c(visit))
+fh_20yr_clean$mi_fchd_in20<- as.factor(fh_20yr_clean$mi_fchd_in20)
+fh_20yr_clean <- subset(fh_20yr_clean, !is.na(chol))
+fh_20yr_clean <- subset(fh_20yr_clean, !is.na(cigs_day))
+fh_20yr_clean <- subset(fh_20yr_clean, !is.na(gluc))
+```
+
+```{r missing data fh_20yr_clean}
 #check for missing data in fh_20yr_clean 
 summary(is.na(fh_20yr_clean)) #bp_meds 37; cigs_day 23; educ 74; chol 41; bmi 10; glu 285; hr 1 #6 columns with missing data 
 miss<- t(colSums(is.na(fh_20yr_clean)))
 kable(t(colSums(is.na(fh_20yr_clean)))) #tells you which var have missing values and how many 
-
 ```
-```{r clean mi_fchd ; NO baseline characteristics on mi_fchd ; with time to event descriptive stats on mi_20yr_clean }
+
+```{r clean mi_fchd }
 #density curve of those with at least 20 years follow up 
 #density curve for continuous data 
 #histogram 
@@ -81,11 +91,19 @@ fh_mifchd_clean <- fh_mifchd %>%
          smoke_curr=factor(smoke_curr, levels=c(0,1), labels=c("no", "yes")),
          prev_angina=factor(prev_angina, levels=c(0,1), labels=c("no", "yes")),
          prev_ht=factor(prev_ht, levels=c(0,1), labels=c("no", "yes")),
-         prev_stroke=factor(prev_stroke, levels=c(0,1), labels=c("no", "yes")),
-         mi_fchd=factor(mi_fchd, levels=c(0,1), labels=c("no_event", "event")))   #worked!!!!!!
+         prev_stroke=factor(prev_stroke, levels=c(0,1), labels=c("no", "yes")) ,
+         mi_fchd=factor(mi_fchd, levels=c(0,1), labels=c("no_event", "event")))   #worked!!!!!!  but made weird 1,2
+df<-fh_mifchd_clean %>% mutate(mi_fchd=as.numeric(mi_fchd)) #make coding simpler 
+df <- subset(df, !is.na(chol))
+df <- subset(df, !is.na(cigs_day))
+df <- subset(df, !is.na(gluc))
+fh_mifchd_clean <- df  
 ```
+
+random ntoes: NO baseline characteristics on mi_fchd ; with time to event descriptive stats on mi_20yr_clean 
+rerun descriptive stats on cleaned databases? (remove nas...)
 ```{r  pretty tables with arsenal and tabley stats fh_mifchd}
-library(arsenal)
+#library(arsenal)
 data(mockstudy) # practice 
 dim(mockstudy)
 str(mockstudy)
@@ -99,6 +117,48 @@ tab4<-tableby(mi_fchd_in20 ~ sex + age + sbp + dbp + bp_meds + smoke_curr + cigs
                 bmi + gluc + diab + hr, data=fh_20yr_clean, digits=2 )
 #kable(summary(tab4))
 ```
+
+```{r graphs BREAK UP}
+female<- fh_mifchd %>% group_by (mi_fchd, sex) %>% summarise(count=n()) 
+#density plot 
+df<- fh_20yr_clean
+
+ggplot() + theme_tufte() + ggtitle("Density plot of chol and mi_fchd") +  
+  geom_density(aes(x=chol, col=mi_fchd_in20), data=df) + scale_color_discrete(name="had mi or fchd")   #density
+
+
+
+df<- fh_20yr_clean
+ggplot() + theme_tufte() + ggtitle("Density plot of age and mi_fchd") +  
+  geom_density(aes(x=age, col=interaction(mi_fchd_in20)), data=df) + scale_color_discrete(name="had mi or fchd")   #density
+
+ggplot() + theme_tufte() + ggtitle("Density plot of chol and mi_fchd") +  
+  geom_density(aes(x=chol, col=mi_fchd_in20), data=df) + scale_color_discrete(name="had mi or fchd")   #density
+ggplot(df) + theme_tufte() + ggtitle("histogram of age and mi_fchd") + geom_histogram(aes(x=age, group=mi_fchd_in20, fill=mi_fchd_in20)) +scale_color_discrete(name="had mi or fchd")
+
+ggplot(df) + geom_histogram(aes(x=age, group=mi_fchd_in20, col=mi_fchd_in20), binwidth=2) + theme_tufte()#as.factor gives the lines and coloring 
+ggplot(df, aes(age, fill=mi_fchd_in20)) + geom_histogram(binwdith=50) + theme_tufte()
+  
+g<- ggplot(df, aes(mi_fchd_in20)) + xlab("MI or Fatal CHD") + theme_tufte() +ylab("percent") 
+g+ geom_bar(aes(y=100*(..count..)/sum(..count..), fill=diab), position=position_dodge()) +ggtitle("Bar plot of mi_fchd and diabetes status")
+g+ geom_bar(aes(y=100*(..count..)/sum(..count..),fill=sex), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and sex")
+barplot_perc_sex<- g+ geom_bar(aes(y=100*(..count..)/sum(..count..),fill=smoke_curr), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and smoking")
+
+
+cig<- ggplot(df, aes(cigs_day)) + xlab("number of cigs per day") + theme_tufte() + ylab("count") 
+cig + geom_bar(aes(fill=mi_fchd)) + ggtitle("bar chart cigs per day and mi_fchd")
+cig+geom_density(aes(col=interaction(mi_fchd))) + ggtitle("density plot cigs per day and mi_fchd")
+
+ggplot(df) + geom_histogram(aes(x=cigs_day, group=mi_fchd, fill=mi_fchd), bins=50) + theme_tufte() + ggtitle("hisotgram of cigs per day and mi_fchd")   #not sure if group does anthing 
+ggplot(df) + geom_histogram(aes(x=age, group=mi_fchd, fill=mi_fchd), bins=90) + theme_tufte() + ggtitle("hisotgram of age and mi_fchd")   #not sure if group does anthing 
+
+
+#age histogram 
+x<- ggplot(df, aes(age)) + xlab("age") + theme_tufte()+ ylab("count") 
+x+ geom_bar(aes(fill=mi_fchd), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and age")
+x+ geom_bar(aes(fill=mi_fchd), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and age") +geom_text(aes(label=..count..), stat='count',vjust=-0.5)  #adding number counts to bars ... almost there 
+```
+
 ```{r table of missing data count percentage another way to show it }
 #make table to show missing values
 var<- c("bp_med", "cigs_day", "educ", "chol", "bmi", "gluc", "hr")
@@ -113,58 +173,11 @@ row.names(missrr) <- NULL  #removes row numbers
 kable(missrr)
 ```
 
-# Abstract
-coming soon
-intr
-methods - All analyses were performed using R statistical software, version 1.1.463 and #home version. (R Studio, place). We .... Odds ratios and 95% confidence intervals were calculated for an ....  The basic model had the following form: 
-logit(p(y)) = .....
-where Y indicated the prescence of an MI of FCHD. The a priori models contained ... .  
-results
-conclusion 
-
-# Introduction
-
-Coronary heart diesase is a common health issue facing people today. Lifestyle and genetics alike contribute to a person's risk of CHD. 
-Also known as astherosclerosis, is the buildup of plaque in the arterial walls. Plaque buildup obstructs blood flow. Additionally, clots may break off of the plaque buildup and cause 'acute occulsion of the artery'. Lifestyle adjustments, medications, and surgical procedures can 'open' restrircted arteries. 
-Coronary circulation refers to the path and network of vessels that provide blood to the heart/myocardic muscle. If blood flow is restricted or impeded within this network, the heart muscle does not get enough oxygen and starts to die, causing a cascading effect. Other forms of asthersclerosis include strokes/ circle of willis, the network of vessels that deliver blood to the brain. 
-
-The goal of the present study is to identify trends in the association between cholesterol serum levels and risk of CHD. 
-Researchers used data from the FHS cohort. 
-Glucose has the most missing data (in ENTIRE dataset)
-No missing data for diabetic, and gluc would be an indicator for diabetes. Could eliminate, but then miss out on pre-diabetic, undiagnosed people. 
-
-
-# Variable Selection 
-Relevant variables of interest for this question include 
-sex
-age
-sbp (systolic blood pressure) - the pressure in blood vessels when the heart beats 
-(dbp (diasolitc blood pressure) - the pressure in blood vessels when the heart rests between beats
-
-A cohort of data on subjects who had at least 20 years of followup or an MI or fatal CHD within 20 years of baseline was provided with 3060 observations.
-A cohort of data on subjects with any amouny of followup or an MI or fatal CHD was provided with 3848 observations. 
-
-#Results
-
-Descriptive statistics for the population with any amount of followup is presented in Table 1. (similar descriptive stats for the cohort with 20yrs follow up is available in the appendix)
-```{r results tables}
-kable(summary(tab3))   #work on renaming column names and row names
-```
-
-
-Log transformations can be helpful when data is skewed right ... Lecture 7 Flexible Adjustment p 12 
-
-
-#Appendix
-```{r appendix codes }
-kable(summary(tab4)) #descriptive stats for 20yr follow up dataset 
-```
-
-```{r try to model}
+```{r  model logistic regression for part 1}
 get_ests_table <- function(model_obj){
   model_ests <- data.frame(names(coef(model_obj)),
   round(coef(model_obj), digits=4),
-  round(sqrt(diag(sandwich(model_obj))), digits=4),
+  round(sqrt(diag(sandwich(model_obj))), digits=4),  #fix rounding 
       round(exp(coef(model_obj)), 4),
       exp(confint(model_obj)))
 model_ests$ci <- paste0("(",
@@ -178,29 +191,369 @@ colnames(model_ests) <- c("Model Term", "Estimate", "SE",
 return(model_ests)
 }
 #acting weird for outcome within 20yrs
-main_model<-glm(mi_fchd_in20 ~ chol+sex+ns(age,3)+ns(sbp, 3) +smoke_curr +ns(gluc,3) + diab, family=binomial, data=fh_20yr_clean)
-summary(main_model)   #standard error tells you how wide CI should be 
-(exp(coef(main_model)[2]))
-main_model_ests<-get_ests_table(main_model)
+
+
+main_model<-glm(mi_fchd_in20 ~ chol+sex+ns(age,3)+ns(sbp, 3) +cigs_day +ns(gluc,3) + diab, family=binomial, data=fh_20yr_clean)
+
+summary(main_model)   #standard error tells you how wide CI should be  #se indicates the reliability of the mean; larger sample size normally gives smaller SE; sd is not directly affected by sample size 
+main_model_ests<-get_ests_table(main_model) 
+#hw6
+p1val<- exp(coef(main_model)[2]) #but the rounding
+print(p1val, digits=5)  #one way to handle rounding! 
+p1valci<-exp(confint(main_model, level=0.95)[2,1:2])
+print(p1valci, digits=5)
 kable(main_model_ests, digits=6, row.names=F)
+#test!  using 10b code lines 31ish 
+main_model_red<- glm(mi_fchd_in20 ~ sex+ns(age,3)+ns(sbp, 3) +cigs_day +ns(gluc,3) + diab, family=binomial, data=fh_20yr_clean) 
+anova(main_model_red, main_model, test="LRT")  #issues from missing variables 
+
+
+is.na(main_model)
+is.na(main_model_red)
+summary(is.na(fh_20yr))
 ```
-We estimate the odds of an MI or FCHD within 20 years of followup are 1.0086 (1.0059, 1.0113) times higher for a one unit difference in cholesterol serum levels (mg/dL), when adjusting for age, sex, sbp, glucose, current smokign status, and diabetes.  
+
+```{r now modeling for time until disease using cox ph survival analysis for part 1.2}
+#notes14, 15
+#kaplan meirer estimates 
+df<-fh_mifchd_clean 
+ df_surv<-Surv(df$time_mifchd, df$mi_fchd)  #create surv objects
+ df_survfit<-survfit(df_surv ~ chol , data=df) #estimate survival curve 
+# df_surv_red<-survfit(df_surv~1, data=df)
+ #anova(df_surv_red, df_surv, test="LRT") #no applicable method for 'anova' applied to an object of class "survfit"
+ 
+# survdiff(df_surv~chol + age, data=df)  #based on 16.18; one line per chol level 
+
+# summary(df_survfit)  #broken up for each chol level!   #because chol is continuous!  
+#lecture16 17 
+plot(df_survfit) #looks scary  probably one line per chol level....   something about right skew transformation?   still weird with changed level names 
+
+#instead do PH regression
+df_ph<- coxph(Surv(df$time_mifchd, df$mi_fchd)~chol+sex+ns(age,3)+ns(sbp, 3) +cigs_day +ns(gluc,3) + diab, data=df)  #Cox model doesn't support "mright" survival data   #mi_fchd needs to be NUMERIC   now fixed 
+df_ph   #the estimated hazard ratio for mi_fchd for one unit difference in chol, among same age, smoking, glub etc is 0.0055 (se=0.0007)
+df_ph_survfit<-survfit(df_ph)
+#summary(df_ph_survfit)  #long output 
+plot(df_ph_survfit)
+print(ggsurvplot(df_ph_survfit, data=df, break.x.by=365.25,
+                 surv.median.line="hv",
+                 title="PH Regression by Chol level",
+                 xscale="d_y", xlab="Time (Years)",
+                 conf.int = FALSE, pval=TRUE)) #, 
+         
+
+summary(df_ph)   #17.32
+df_ph_red<- coxph(Surv(df$time_mifchd, df$mi_fchd)~sex+ns(age,3)+ns(sbp, 3) +cigs_day +ns(gluc,3) + diab, data=df)
+anova(df_ph_red, df_ph)  #deal with missing values again 
+####
+print(exp(10*coef(df_ph)), digits=5)
+print(exp(10*confint(df_ph, level=0.95)), digits=5)   #when more varaibles exp(confint(main_model, level=0.95)[2,1:2])
+#the estimated hazard ratio for a differnce of 10 mg/dL cholestoerol in baseline is ... 
+
+#17, slide 18 for continuous variable 
+#the hazard ratio comparing someone chol level (z+1) to someone chol level z
+
+#log rank compares 2 curves ; can only stratify with kaplab neyer - no adjust 
+```
+
+## Abstract
+coming soon
+intr
+methods - All analyses were performed using R statistical software, version 1.1.463 and #home version. (R Studio, place). We .... Odds ratios and 95% confidence intervals were calculated for an ....  The basic model had the following form: 
+logit(p(y)) = .....
+where Y indicated the prescence of an MI of FCHD. The a priori models contained ... .  
+results
+conclusion 
+
+## Introduction
+
+*2 paragraphs; background and context ; can pull from prompt *
+
+Coronary heart diesase is a common health issue facing people today. Approximately 1 in every 4 deaths is due to heart disease. Lifestyle and genetics alike contribute to a person's risk of CHD.  DEATH or disability 
+Also known as astherosclerosis, is the buildup of plaque in the arterial walls. Plaque buildup obstructs blood flow. Additionally, clots may break off of the plaque buildup and cause 'acute occulsion of the artery'. Lifestyle adjustments, medications, and surgical procedures can 'open' restrircted arteries. 
+Coronary circulation refers to the path and network of vessels that provide blood to the heart/myocardic muscle. If blood flow is restricted or impeded within this network, the heart muscle does not get enough oxygen and starts to die, causing a cascading effect. Other forms of asthersclerosis include strokes/ circle of willis, the network of vessels that deliver blood to the brain. 
+
+The goal of the present study is to identify trends in the association between cholesterol serum levels and risk of CHD. 
+Researchers used data from the FHS cohort. 
+Glucose has the most missing data (in ENTIRE dataset)
+No missing data for diabetic, and gluc would be an indicator for diabetes. Could eliminate, but then miss out on pre-diabetic, undiagnosed people. 
+
+
+## Variable Selection 
+for each varaible in the dataset adress it's relevance! or lack; include potential confounding 
+
+confounder or mediator?
+Relevant variables of interest for this question include 
+sex - confounder; risk increases with age in both sexes; more men? but more women and angina? age linked to increased risk of CHD; associated with smoking  
+age - continuous; risk increases with age; increases wear and tear on vessels ; people older than 65? ; lifetime to build up plaque in arterial walls; arteriosclerosis - hardening of arteries; causes high bloo pressure and hypertension; 
+sbp (systolic blood pressure) - continuous; the pressure in blood vessels when the heart beats ; higher sbp and chd
+(dbp (diasolitc blood pressure) - the pressure in blood vessels when the heart rests between beats
+possible confounders
+
+cholesterol --> mi or fchd within 20 years of baseline 
+smoking increases LDL (bad) cholesterol and decreases HDL (good cholesterol helpful in preventing clotting) but also
+smoking increases blood pressure, CO stiffens arterial walls; nicotine narrows blood vessels (increase blood pressure and heart rate )
+high blood pressure stretches and scars arteries - thicken, blood cells stick better to rough vessel walls, which increases risk of clots  
+smoking measured by whether or not participant is currently smokier, and by how much they smoke per day
+CIGS PER DAY is the better variable because it includes those who do not (0) and provides range - among those who report smoking, do they smoke a single cigarette or multple
+
+exclude current smoking status; visit; id 
+
+## statistical methods
+variables in numeric or factor form; splines for flexibility on continious variables. 
+logistic regression for binary outcome (MI FCHD within 20 years of baseline)
+for more information on time to outcome or censorship, cox proportional hazard to account for regression in survival analysis 
+
+confirmatory analyssi conducted To investigate if cholesterol serum levels were associated with risk of MI or Fatal CHD, alogistic regression analysis was applied. THe outcome of interested was binary if the outcome occured within 20 years and the variable of interest was cholesterol levels. Due to potential confounding from age, sex, systolic blood pressure ..... those were included in the model and adjusted for accordingly.  A cohort of data on subjects who had at least 20 years of followup or an MI or fatal CHD within 20 years of baseline was provided with 3060 observations.
+Additional risk factors for MI or fatal CHD were identified by conducting sensitivity analysis to the above models. 
+We calclated the odds ratio for outcome by cholesterol levels using logistic regression 
+
+$\ logit(P(Y_{i}=1))$ = $\beta_{1}$ + $\beta_{1x1}$ + $\beta_{2x2}$  
+logit(p)= b0 + b1CholSpline1? + b2cholspline2 + b3cholspline3 +b4agespline 1...  +ns(x2,3)
+
+$\ H_{0}$: $\beta_{1}$=0
+$\ H_{A}$: $\neq$ 0 
+
+
+test using LRT? 
+
+age is continuous, use 3 df splines to be flexible
+SBP is continuous, use 3 df splines to be flexible
+chol is continusous, can you use 3 df splines on outcome of itnerest? 
+
+confirmatory analysis conducted To investigate if if there was evidence of an association between cholesterol levels and time until MI or fatal CHD, proportional hazard regression was performed. A cohort of data on subjects with any amouny of followup or an MI or fatal CHD was provided with 3848 observations. 
+$\h(t)$ = $h_{0}$$\ (t)$ * $\exp($$\ B$$_{1x1}$ + ... + $\ B$$_{kxk}$   
+
+Signifcance was set at $\alpha$  = 0.05.
+
+these above 2 models were prespecific - done before analysis and built based on existing knowledge of confounding 
+the last one was exploratory after the first 2. 
+
+exp$\hat{B}_{1}$ = OR (95% CI: #,#)
+
+cox proportional hazard survival analysis for assioations
+
+exploratory analysis conducted to investigate addditional risk factors. ; sensitivity 
+correlation for confounders 
+interactions? (age-smoking, sbp-chol, sbp-age, smoking-chol-sbp)
+
+
+
+## descriptive stats 
+numerical, graphical summaries of cohort; relationships relevant to questions of interst 
+relationships of age, sex to mi fchd or cholesterol levels 
+
+Descriptive statistics for the population with any amount of followup is presented in Table 1. (similar descriptive stats for the cohort with 20yrs follow up is available in the appendix)
+
+```{r results tables sum statistics}
+kable(summary(tab3))   #work on renaming column names and row names
+```
+
+Bar charts comparing yes/no with outcome 
+```{r percent barchart sex}
+print(barplot_perc_sex)  #percent bar plot showing distribution of male and female 
+```
+
+boxplot could show distribution of age among those who died and survived 
+```{r boxplots to show distributions}
+p<- ggplot(fh_mifchd_clean, aes(x=mi_fchd, y=age)) + geom_boxplot() + theme_tufte() 
+r <- ggplot(fh_mifchd_clean, aes(x=mi_fchd, y=chol)) + geom_boxplot() + theme_tufte() + ggtitle("continuous")
+rr<- ggplot(fh_20yr_clean, aes(x=mi_fchd_in20, y=chol)) + geom_boxplot() + theme_tufte()+ ggtitle("binary")
+grid.arrange(r,rr, ncol=2)
+```
+
+## Results
+ex. outcome of mi_chd based on previous angia 
+
+```{r prev variable visualizations}
+prev_angina<- ggplot(fh_mifchd_clean, aes(prev_angina)) + xlab("status") + theme_tufte() + ylab("count") 
+prev_angina + geom_bar(aes(fill=mi_fchd),position=position_dodge()) + ggtitle("bar chart prev_angina and mi_fchd")
+
+prev_stroke<-  ggplot(fh_mifchd_clean, aes(prev_stroke)) + xlab("status") + theme_tufte() + ylab("count")
+prev_stroke + geom_bar(aes(fill=mi_fchd),position=position_dodge()) + ggtitle("bar chart prev_stroke and mi_fchd")   # maybe percentage? 
+
+#histogram for age 
+```
+
+#r model logistic regression for part1 chunk 
+In a study of 2748 people, we found evidence to reject the null hypothesis thatcholesterol serum level is not associated with an mi or fchd within 20 years of the study baseline (p=6e-10). We estimate that the odds of an MI or FCHD within 20 years of followup are 1.0086 (1.0059, 1.0113) also `r p1val` (`r p1valci`) times higher for a one unit difference in cholesterol serum levels (mg/dL), *among those with the same* *when adjusting for* age, sex, sbp, glucose, number of cigarettes smoked per day, and diabetes.  
 
 ***glu and diabetes could be correlated - or glucose might indicate non diagnosed diabetics
 ****likewise, diabetics might be taking medications to control glucose 
 
 #for adjusting, refer to HW7 sensetivity analysis question 2e 
+Survival methods account for censoring (we do not when or if an event occured to an individual due to loss of followup, death, or study end etc)
+right vs left vs interval  censor (L14,slide11)  but most survival data is right censored 
+|-------| ---X--> 
+notes15, slide 4
+The survivor function S(t)=P(T>t) is the probability of surviving longer than time t; T is actual time of obsercation, t is time we're calculating
+S(t)=P(T>t)=1-F(t) distribution ; proprtion of people who have  died by time t or proprotion of people who have survived at time t 
+kaplan meier estimator of survivoal curve
+survival curves provide descriptive measure of right censored data; estimate survival for specific times; compare survival across discrete groups via stratgication
+but for chol we'll do proprtional hazards regression! 
+
+hazard h(t) is instantaneous risk of an event at time t, among those without event before t
+if an event is death, the hazard is the probability of dying at time t, given that one is still alive at time t 
+what is probability of dying on day x (with chol level of blah?) 
+
+# now modeling for time until disease using cox ph survival analysis 
+In a study of 3464 people, we found evidence to reject the null hypothesis that cholesterol serum levels are not associated with MI FCHD events (p <0.0001). We estimate that the hazard ratio for a one unit difference in cholesterol is 1.006 (95% CI: 1.004, 1.007), adjusted for sex, age, systolic blood pressure, cigarettes per day, glucose level and diabetes status. 
 
 
-```{r now modeling for time until disease using survival analysis}
-df<-fh_mifchd_clean
-df_surv<-Surv(df$time_mifchd, df$mi_fchd)
-df_survfit<-survfit(df_surv ~ chol , data=df)
-plot(df_survfit) #looks scary  probably one line per chol level....   something about right skew transformation? 
-print(ggsurvplot(df_survfit, data=df))
+#then do senesitivity analysis etc for other RF for MI and fatal CHD 
+
+## Discussion/ conclusion 
+limitations to removign data 
+limitations to treating outcome as binary vs survival 
+sensitiviy analyssi results;
+other relevant matters 
+
+future studies should take alcohol consumption into consideration (like smoking question)
+
+## References
+D.R. Cox (1972) Regression Models and Life-Tables ---- Proportional Hazards Regression (L17 p 4)
+
+R Core Team (2018). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. URL
+  https://www.R-project.org/.
+
+##Appendix for part 1
+interesting symbols to incorportate from [here](https://www.calvin.edu/~rpruim/courses/s341/S17/from-class/MathinRmd.html)  
+
+$\log(x)$   log(x)
+$\alpha A$  alpha
+$\beta B$  beta
+$\sigma \Sigma$
+$\chi X$
+$\mu M$
+$x_{n}$   X subscript n
+$x^{n}$ x superscript n
+$\hat{x}$  x hat 
+$\overline{x}$ x bar 
+$\neq$not equal to 
+
+```{r appendix codes }
+kable(summary(tab4)) #descriptive stats for 20yr follow up dataset 
 ```
 
-```{r modeling help comparisons to hw in the end it was rounding in the super function}
+## R-script 
+```{r show-code, ref.label=all_labels(), echo = TRUE, eval=FALSE}
+#should print all code
+```
+
+
+## Part 2! 
+
+```{r prediction start}
+#notes13
+df2<-fh_20yr_clean %>% mutate(mi_fchd_in20=as.numeric(mi_fchd_in20)) #make coding simpler
+df2<- fh_20yr
+str(df2$mi_fchd_in20)  #as factor! 
+pred_1<-glm(mi_fchd_in20~chol, sex, age, data=df2, family=binomial)  #happier with raw dataset? 
+summary(pred_1)  #graph variable vs predicted probability of outcome (l13, s7)
+#copied from notes 13,14 
+cutoff<- 0.5
+yhat_c<-ifelse(predict(pred_1, type="response")>cutoff, 1,0)
+confusionMatrix(data=factor(yhat_c),
+                reference=factor(df2$mi_fchd_in20),
+                positive="1")
+#graph ROC
+predobj<- prediction(predictions=predict(pred_1, type="response"), labels=df2$mi_fchd_in20)
+perfobj<-performance(predobj, 'tpr', "fpr")  #try with diff combos " ' 
+plot(perfobj)
+abline(0,1, col="grey")
+
+#ROCR calculate AUC 
+aucs_obj<-performance(pred_list, 'auc')
+aucs<-unlist(aucs_obj@y.values)
+kable(data.frame(Model=1:6, AUC=aucs), digits=3)  #based on 13.26 with 6 diff models t compare 
+
+#ROCR sens-spec plot
+perf_list<- performance(pred_obj, 'sens', 'spec')
+plot(perf_list, colorize=T)
+
+#prevision recall curve
+perf_list<-performance(predobj, 'prec', "rec")
+plot(perf_list)
+```
+model evaluation
+1. model fitting (calculate betas)
+2. mdoel selection
+3. model evaluation
+
+split data into 3 mutuallly exclusive sets
+1. training data - fit candidate mdoels; estiamte betas 
+2. validation data - evaluate performance; estiamte out of sample error; choose model with best performance; accuracy or AUC 
+3. test data = fh_20yr_test 
+
+#methods!
+since dataset is smallish? fh_20yr_clean has 3060 obs combine training and validation 
+OR cross validation fh_20yr_clean   13.42! 
+
+```{r modeling tests make three df Part 2!!!for binary data analysis L13 }
+#confirmatory needs train,test,validate sets
+set.seed(10)
+trainfull_inds<-createDataPartition(df$mi_fchd, p=0.5)
+trainfull<-df[trainfull_inds[[1]],]
+train_df<-df[-trainfull_inds[[1]],]
+train_inds<-createDataPartition(trainfull$mi_fchd, p=0.5) #1924
+test_df<-trainfull[train_inds[[1]],]  #926
+validate_df<-trainfull[-train_inds[[1]],] #962 
+c(nrow(train_df),nrow(test_df), nrow(validate_df))
+
+blurg<- train_df %>% 
+  count(mi_fchd, sex)  #make 2x2 table to look for relationships? 
+
+train_df<- train_df %>% 
+  mutate(sex=as.factor(sex),
+         bp_meds=as.factor(bp_meds),
+         smoke_curr=as.factor(smoke_curr),
+         diab=as.factor(diab),
+         mi_fchd=as.factor(mi_fchd))
+levels(train_df$sex) <- c("male", "female")
+levels(train_df$diab) <-c("not diabetic", "diabetic")
+levels(train_df$mi_fchd)<- c("no event", "event")
+```
+
+
+# abstract
+# model selection
+# model performance
+# cutpoint selection
+# R script 
+
+```{r show-code, ref.label=all_labels(), echo = TRUE, eval=FALSE}
+#should print all code
+```
+
+
+## old 
+```{r basic survival curve with whole dataset too basic, practice }
+#coxph!
+df$time_mifchd<-as.numeric(df$time_mifchd)
+ph_df_chol<- coxph(Surv(df$time_mifchd, df$mi_fchd)~chol, data=df)
+ph_df_chol
+exp(10*coef(ph_df_chol))
+exp(20*coef(ph_df_chol))
+exp(-10*coef(ph_df_chol))
+summary(ph_df_chol)
+```
+
+```{r clean NOT Necessary if splitting into training sets }
+df<- fh_mifchd %>% 
+  mutate(sex=as.factor(sex),
+         bp_meds=as.factor(bp_meds),
+         smoke_curr=as.factor(smoke_curr),
+         diab=as.factor(diab))
+
+
+#ways to see is.na 
+
+str(which(is.na(df), arr.ind=TRUE))
+length(unique(which(is.na(df), arr.ind=TRUE))) #942
+which(is.na(df$chol), arr.ind=TRUE)  #shows 41 rows missing chol data  #could id rownames for each missing var, stitch columns together and remove rows?
+# not in newest code 
+```
+
+```{r modeling help comparisons to hw in the end it was rounding in the super function irrelevant }
 #compare to hw7
 url <- paste0("https://raw.githubusercontent.com/cbrents/stat796logreg/master/hw4/icu2.csv")
 icu<-read_csv(url)
@@ -250,148 +603,6 @@ coxph(Surv(df$time, df$status)~tx_long, data=df)
 
 main_model<-glm(time_mifchd~chol+sex+ns(age,3)+ns(sbp,3), family=binomial, data=fh_mifchd_clean)   #survival analysis becuase outcome of interest is continuous 
 ```
-
-```{r desnity chol}
-df<- fh_20yr_clean
-
-ggplot() + theme_tufte() + ggtitle("Density plot of chol and mi_fchd") +  
-  geom_density(aes(x=chol, col=mi_fchd_in20), data=df) + scale_color_discrete(name="had mi or fchd")   #density
-```
-
-```{r graphs }
-female<- fh_mifchd %>% group_by (mi_fchd, sex) %>% summarise(count=n()) 
-
-
-
-
-        
-test<- lapply(testdf, function(x) rbind(mean=mean(x),
-                                    sd=sd(x),
-                                    median=median(x),
-                                    mean=mean(x),
-                                    s.size=length(x)))          
-testdf<-select(df, c(age, chol, cigs_day))
-data.frame( test_df )
-print(test)
-print(ddst)
-
-
-
-df<- fh_20yr_clean
-ggplot() + theme_tufte() + ggtitle("Density plot of age and mi_fchd") +  
-  geom_density(aes(x=age, col=interaction(mi_fchd_in20)), data=df) + scale_color_discrete(name="had mi or fchd")   #density
-
-ggplot() + theme_tufte() + ggtitle("Density plot of chol and mi_fchd") +  
-  geom_density(aes(x=chol, col=mi_fchd_in20), data=df) + scale_color_discrete(name="had mi or fchd")   #density
-ggplot(df) + theme_tufte() + ggtitle("histogram of age and mi_fchd") + geom_histogram(aes(x=age, group=mi_fchd_in20, fill=mi_fchd_in20)) +scale_color_discrete(name="had mi or fchd")
-
-ggplot(df) + geom_histogram(aes(x=age, group=mi_fchd_in20, col=mi_fchd_in20), binwidth=2) + theme_tufte()#as.factor gives the lines and coloring 
-ggplot(df, aes(age, fill=mi_fchd_in20)) + geom_histogram(binwdith=50) + theme_tufte()
-  
-g<- ggplot(df, aes(mi_fchd_in20)) + xlab("MI or Fatal CHD") + theme_tufte() +ylab("percent") 
-g+ geom_bar(aes(y=100*(..count..)/sum(..count..), fill=diab), position=position_dodge()) +ggtitle("Bar plot of mi_fchd and diabetes status")
-g+ geom_bar(aes(y=100*(..count..)/sum(..count..),fill=sex), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and sex")
-g+ geom_bar(aes(y=100*(..count..)/sum(..count..),fill=smoke_curr), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and smoking")
-
-
-cig<- ggplot(df, aes(cigs_day)) + xlab("number of cigs per day") + theme_tufte() + ylab("count") 
-cig + geom_bar(aes(fill=mi_fchd)) + ggtitle("bar chart cigs per day and mi_fchd")
-cig+geom_density(aes(col=interaction(mi_fchd))) + ggtitle("density plot cigs per day and mi_fchd")
-
-ggplot(df) + geom_histogram(aes(x=cigs_day, group=mi_fchd, fill=mi_fchd), bins=50) + theme_tufte() + ggtitle("hisotgram of cigs per day and mi_fchd")   #not sure if group does anthing 
-ggplot(df) + geom_histogram(aes(x=age, group=mi_fchd, fill=mi_fchd), bins=90) + theme_tufte() + ggtitle("hisotgram of age and mi_fchd")   #not sure if group does anthing 
-
-
-#age histogram 
-x<- ggplot(df, aes(age)) + xlab("age") + theme_tufte()+ ylab("count") 
-x+ geom_bar(aes(fill=mi_fchd), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and age")
-x+ geom_bar(aes(fill=mi_fchd), position=position_dodge()) + ggtitle("Bar plot of mi_fchd and age") +geom_text(aes(label=..count..), stat='count',vjust=-0.5)  #adding number counts to bars ... almost there 
-```
-
-
-
-```{r basic survival curve with whole dataset}
-df <- fh_mifchd_clean
-max(df$time_mifchd) #8766   24 yrs
-df_surv<-Surv(df$time_mifchd, df$mi_fchd)
-df_survfit<-survfit(df_surv ~ 1, data=df)
-print(ggsurvplot(df_survfit, data=df, break.x.by=365.25,
-                 surv.median.line="hv",
-                 title="MI CHD survival",
-                 xscale="d_y", xlab="Time (Years)"))
-                 #risk.table=TRUE, risk.table.col='strata'))  # is no median line 
-#1 yr is too small; 5 yr = 1826 days 10yr = 3652
-str(df_survfit)
-#r surv stuff
-summary(df_survfit, times=365*c(1:25))
-#r log rank test}
-df_survfit_chol<-survfit(df_surv~chol, data=df)
-
-ggsurvplot(df_survfit_chol, data=df,
-           title="Time until death",
-                 break.x.by=365.25,
-           xscale="d_y",xlab="Time (Years)",conf.int = FALSE)
-
-survdiff(df_surv ~ chol, data=df)  #gives all the values of chol
-print(survdiff(df_surv ~ sex, data=df), digits=4)#log rank test 
-survdiff(formula=surv(time_mifchd, mi_fchd)~chol, data=df)
-
-#coxph!
-df$time_mifchd<-as.numeric(df$time_mifchd)
-ph_df_chol<- coxph(Surv(df$time_mifchd, df$mi_fchd)~chol, data=df)
-ph_df_chol
-exp(10*coef(ph_df_chol))
-exp(20*coef(ph_df_chol))
-exp(-10*coef(ph_df_chol))
-summary(ph_df_chol)
-```
-
-The estimated hazard ratio for a difference of 1 chol serum level in baseline chol is 1.007065
-The estimated hazard ratio for a difference of 10 chol serum levels in baseline col is 1.1.
-The estimated hazard ratio for a difference in 20 chol serum levels in baseline col is 1.2
-We reject the null hypothesis that chol serum is not related to survival (p<0.0001). The estimated hazard ratio for those with chol serum diff compare to those without is 1.01 (1.01, 1.01) <- probably because 1 variable only.    # from L17 p 33 
-
-```{r modeling tests make three df Part 2!!!for binary data analysis L13 }
-#confirmatory needs train,test,validate sets
-set.seed(10)
-trainfull_inds<-createDataPartition(df$mi_fchd, p=0.5)
-trainfull<-df[trainfull_inds[[1]],]
-train_df<-df[-trainfull_inds[[1]],]
-train_inds<-createDataPartition(trainfull$mi_fchd, p=0.5) #1924
-test_df<-trainfull[train_inds[[1]],]  #926
-validate_df<-trainfull[-train_inds[[1]],] #962 
-c(nrow(train_df),nrow(test_df), nrow(validate_df))
-
-blurg<- train_df %>% 
-  count(mi_fchd, sex)  #make 2x2 table to look for relationships? 
-
-train_df<- train_df %>% 
-  mutate(sex=as.factor(sex),
-         bp_meds=as.factor(bp_meds),
-         smoke_curr=as.factor(smoke_curr),
-         diab=as.factor(diab),
-         mi_fchd=as.factor(mi_fchd))
-levels(train_df$sex) <- c("male", "female")
-levels(train_df$diab) <-c("not diabetic", "diabetic")
-levels(train_df$mi_fchd)<- c("no event", "event")
-```
-
-```{r clean NOT Necessary if splitting into training sets }
-df<- fh_mifchd %>% 
-  mutate(sex=as.factor(sex),
-         bp_meds=as.factor(bp_meds),
-         smoke_curr=as.factor(smoke_curr),
-         diab=as.factor(diab))
-
-
-#ways to see is.na 
-
-str(which(is.na(df), arr.ind=TRUE))
-length(unique(which(is.na(df), arr.ind=TRUE))) #942
-which(is.na(df$chol), arr.ind=TRUE)  #shows 41 rows missing chol data  #could id rownames for each missing var, stitch columns together and remove rows?
-# not in newest code 
-```
-
 
 ```{r obsolete?}
 #descriptive for numerical variables 
@@ -526,4 +737,3 @@ gluc1<- fh_mifchd_clean %>%
              sd=sd(gluc, na.rm=TRUE))
 kable(gluc1)
 ```
-
